@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Planner</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 0;
+    background: #fff0f5;
+    color: #333;
+  }
+  header {
+    background: linear-gradient(90deg, #ff80ab, #f48fb1);
+    padding: 20px;
+    color: white;
+    text-align: center;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.8em;
+  }
+  .container {
+    max-width: 600px;
+    margin: auto;
+    padding: 10px;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 1em;
+  }
+  .choice-btn {
+    width: 100%;
+    margin-bottom: 10px;
+    color: white;
+  }
+  .work { background: #f06292; }
+  .off { background: #ba68c8; }
+  .task {
+    background: white;
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    border: 2px solid transparent;
+    transition: 0.2s;
+  }
+  .task.completed {
+    border-color: #f8bbd0;
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+  .task input {
+    margin-right: 10px;
+  }
+  .category {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 0.7em;
+    border-radius: 12px;
+    margin-bottom: 4px;
+  }
+  .progress {
+    margin: 10px 0;
+    background: #ffe4ec;
+    border-radius: 10px;
+    overflow: hidden;
+    height: 10px;
+  }
+  .progress-bar {
+    background: #f06292;
+    height: 10px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+  #walkToggle {
+    background: #f8bbd0;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.8em;
+    margin-top: 5px;
+    display: inline-block;
+  }
+  .celebration {
+    text-align: center;
+    background: #fce4ec;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 15px;
+    font-weight: bold;
+    color: #ad1457;
+  }
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 9999;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="headerTitle">Daily Planner</h1>
+</header>
+
+<div class="container" id="setupScreen">
+  <button class="choice-btn work" onclick="setDayType('work')">Work Day</button>
+  <button class="choice-btn off" onclick="setDayType('off')">Day Off</button>
+</div>
+
+<div class="container" id="plannerScreen" style="display:none;">
+  <button onclick="resetDay()" style="background:#f8bbd0;margin-bottom:10px;">Change Day Type</button>
+  <div id="walkHomeContainer" style="margin-bottom:10px;display:none;">
+    <span>Walking home today?</span>
+    <div id="walkToggle" onclick="toggleWalkHome()">Yes</div>
+  </div>
+  <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+  <div id="taskList"></div>
+  <div id="celebration" class="celebration" style="display:none;">🎉 Amazing! You've completed your day!</div>
+</div>
+
+<canvas id="confettiCanvas"></canvas>
+
+<script>
+const workDayItems = (walkHome) => [
+  { id: 'wake', time: '6:00 AM', task: 'Wake up', category: 'Morning' },
+  { id: 'yoga', time: '6:00-6:20 AM', task: 'Yoga (20 minutes)', category: 'Morning' },
+  { id: 'shower1', time: '6:20-6:35 AM', task: 'Shower', category: 'Morning' },
+  { id: 'leave', time: '6:40 AM', task: 'Leave house', category: 'Morning' },
+  { id: 'work', time: '7:00 AM-5:00 PM', task: 'Work', category: 'Work' },
+  { id: 'journal', time: 'Break time', task: 'Journaling break (15 min): brain dump, 2 goals, 2 gratitudes', category: 'Work' },
+  ...(walkHome ? [
+    { id: 'walk', time: '5:00-5:40 PM', task: 'Walk home (exercise)', category: 'Evening' }
+  ] : [
+    { id: 'exercise', time: '5:00-5:30 PM', task: 'Exercise at home (30 minutes)', category: 'Evening' }
+  ]),
+  { id: 'shower2', time: '5:40-6:00 PM', task: 'Shower', category: 'Evening' },
+  { id: 'read', time: '6:00-7:00 PM', task: 'Read (1 hour)', category: 'Evening' },
+  { id: 'cook', time: '7:00-8:00 PM', task: 'Cook dinner', category: 'Evening' },
+  { id: 'free', time: '8:00-10:00 PM', task: 'Free time', category: 'Evening' },
+  { id: 'tea', time: '10:00 PM', task: 'Tea time', category: 'Night' },
+  { id: 'skincare', time: '10:00+ PM', task: 'Skincare routine', category: 'Night' },
+  { id: 'bed', time: '~10:30 PM', task: 'Ready for bed', category: 'Night' }
+];
+const dayOffItems = [
+  { id: 'wake_off', time: '~7:00 AM', task: 'Wake up (flexible)', category: 'Morning' },
+  { id: 'yoga_off', time: 'Morning', task: 'Yoga at home', category: 'Activities' },
+  { id: 'laundry', time: 'Anytime', task: 'Do laundry', category: 'Activities' },
+  { id: 'friends', time: 'Anytime', task: 'Call or visit friends', category: 'Activities' },
+  { id: 'clean', time: 'Anytime', task: 'Clean or organize house', category: 'Activities' }
+];
+
+let dayType = null;
+let checkedItems = {};
+let walkHome = true;
+
+const todayKey = new Date().toDateString();
+
+function setDayType(type) {
+  dayType = type;
+  localStorage.setItem(`dayType_${todayKey}`, type);
+  localStorage.setItem(`walkHome_${todayKey}`, walkHome);
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('plannerScreen').style.display = 'block';
+  if (type === 'work') {
+    document.getElementById('walkHomeContainer').style.display = 'block';
+  }
+  renderTasks();
+}
+
+function resetDay() {
+  dayType = null;
+  checkedItems = {};
+  localStorage.removeItem(`dayType_${todayKey}`);
+  localStorage.removeItem(`progress_${todayKey}`);
+  location.reload();
+}
+
+function toggleWalkHome() {
+  walkHome = !walkHome;
+  localStorage.setItem(`walkHome_${todayKey}`, walkHome);
+  document.getElementById('walkToggle').innerText = walkHome ? 'Yes' : 'No';
+  renderTasks();
+}
+
+function toggleItem(id) {
+  checkedItems[id] = !checkedItems[id];
+  localStorage.setItem(`progress_${todayKey}`, JSON.stringify(checkedItems));
+  renderTasks();
+}
+
+function renderTasks() {
+  const items = dayType === 'work' ? workDayItems(walkHome) : dayOffItems;
+  const taskList = document.getElementById('taskList');
+  taskList.innerHTML = '';
+  let completed = 0;
+  items.forEach(item => {
+    const done = checkedItems[item.id];
+    if (done) completed++;
+    const div = document.createElement('div');
+    div.className = `task ${done ? 'completed' : ''}`;
+    div.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''} onclick="toggleItem('${item.id}')">
+    <div><div class="category">${item.category}</div><br>
+    <strong>${item.task}</strong><br><small>${item.time}</small></div>`;
+    taskList.appendChild(div);
+  });
+  const percent = (completed / items.length) * 100;
+  document.getElementById('progressBar').style.width = percent + '%';
+  if (completed === items.length) {
+    document.getElementById('celebration').style.display = 'block';
+    launchConfetti();
+  } else {
+    document.getElementById('celebration').style.display = 'none';
+  }
+}
+
+function loadSavedData() {
+  const savedType = localStorage.getItem(`dayType_${todayKey}`);
+  const savedProgress = localStorage.getItem(`progress_${todayKey}`);
+  const savedWalk = localStorage.getItem(`walkHome_${todayKey}`);
+  if (savedType) dayType = savedType;
+  if (savedProgress) checkedItems = JSON.parse(savedProgress);
+  if (savedWalk !== null) walkHome = savedWalk === 'true';
+  if (dayType) setDayType(dayType);
+  document.getElementById('walkToggle').innerText = walkHome ? 'Yes' : 'No';
+}
+
+function launchConfetti() {
+  const duration = 1500;
+  const end = Date.now() + duration;
+  const canvas = document.getElementById('confettiCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const colors = ['#ff80ab', '#f8bbd0', '#f06292'];
+  const particles = [];
+  for (let i=0;i<150;i++) {
+    particles.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height - canvas.height,
+      r: Math.random()*6+4,
+      c: colors[Math.floor(Math.random()*colors.length)],
+      v: Math.random()*3+2
+    });
+  }
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p=>{
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.c;
+      ctx.fill();
+      p.y += p.v;
+      if (p.y > canvas.height) p.y = -10;
+    });
+    if (Date.now() < end) requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+loadSavedData();
+</script>
+
+</body>
+</html>
